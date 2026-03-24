@@ -89,7 +89,8 @@ MEMOS_API_KEY=YOUR_TOKEN
 
 **Optional config**
 - `MEMOS_BASE_URL` (default: `https://memos.memtensor.cn/api/openmem/v1`)
-- `MEMOS_API_KEY` (required; Token auth) — get it at https://memos-dashboard.openmem.net/cn/apikeys/
+- `MEMOS_API_KEY` (required for cloud mode; Token auth) — get it at https://memos-dashboard.openmem.net/cn/apikeys/
+- `MEMOS_SERVER_MODE` (`cloud` | `self-hosted`; auto-detected from baseUrl if not set)
 - `MEMOS_USER_ID` (optional; default: `openclaw-user`)
 - `MEMOS_CONVERSATION_ID` (optional override)
 - `MEMOS_RECALL_GLOBAL` (default: `true`; when true, search does **not** pass conversation_id)
@@ -146,6 +147,88 @@ In `plugins.entries.memos-cloud-openclaw-plugin.config`:
   "recallFilterCandidateLimit": 30,
   "recallFilterMaxItemChars": 500,
   "recallFilterFailOpen": true
+}
+```
+
+## Self-Hosted Configuration
+
+If you run your own MemOS instance (locally or on a private server), the plugin can connect to it instead of the official MemOS Cloud.
+
+### Differences from Cloud Mode
+
+| | Cloud (default) | Self-Hosted |
+|--|----------------|-------------|
+| Base URL | `https://memos.memtensor.cn/api/openmem/v1` | Your server, e.g. `http://localhost:8001` |
+| API Key | **Required** | **Optional** (depends on your deployment) |
+| Search endpoint | `/search/memory` | `/product/search` |
+| Add endpoint | `/add/message` | `/product/add` |
+| Session ID | `conversation_id` | `mem_cube_id` (mapped automatically) |
+
+### Mode Detection
+
+The plugin determines the server mode using the following priority:
+
+1. **Explicit config** — `"serverMode": "self-hosted"` in plugin config
+2. **Environment variable** — `MEMOS_SERVER_MODE=self-hosted`
+3. **Auto-detection** — If `MEMOS_BASE_URL` hostname is `localhost`, `127.x.x.x`, `10.x.x.x`, `192.168.x.x`, or `172.16–31.x.x`, it is automatically treated as self-hosted
+
+> If your MemOS instance runs on a **public IP** but is still a self-hosted deployment, you must **explicitly set** `serverMode` or `MEMOS_SERVER_MODE`, otherwise it defaults to cloud mode.
+
+### Quick Setup
+
+**Option 1: Environment variables**
+
+```env
+MEMOS_BASE_URL=http://localhost:8001
+MEMOS_SERVER_MODE=self-hosted
+MEMOS_USER_ID=my-user
+```
+
+> In self-hosted mode, `MEMOS_API_KEY` is not required. Omit it if your deployment doesn't need auth.
+
+**Option 2: Plugin config (openclaw.json)**
+
+```json
+{
+  "plugins": {
+    "entries": {
+      "memos-cloud-openclaw-plugin": {
+        "enabled": true,
+        "config": {
+          "baseUrl": "http://localhost:8001",
+          "serverMode": "self-hosted",
+          "userId": "my-user",
+          "conversationId": "main"
+        }
+      }
+    }
+  }
+}
+```
+
+**Option 3: Auto-detection (minimal config)**
+
+If MemOS runs locally, just point `baseUrl` to a local address and the plugin switches to self-hosted mode automatically:
+
+```env
+MEMOS_BASE_URL=http://localhost:8001
+```
+
+### Public-IP Self-Hosted Instances
+
+When MemOS is deployed on a public server, auto-detection won't kick in. Declare the mode explicitly:
+
+```env
+MEMOS_BASE_URL=http://your-server-ip:8008
+MEMOS_SERVER_MODE=self-hosted
+```
+
+Or in plugin config:
+
+```json
+{
+  "baseUrl": "http://your-server-ip:8008",
+  "serverMode": "self-hosted"
 }
 ```
 

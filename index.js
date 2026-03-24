@@ -85,7 +85,7 @@ function buildSearchPayload(cfg, prompt, ctx) {
     source: MEMOS_SOURCE,
   };
 
-  if (!cfg.recallGlobal) {
+  if (!cfg.recallGlobal || cfg.serverMode === "self-hosted") {
     const conversationId = resolveConversationId(cfg, ctx);
     if (conversationId) payload.conversation_id = conversationId;
   }
@@ -251,7 +251,19 @@ function buildRecallCandidates(data, cfg) {
   const preferenceList = Array.isArray(data?.preference_detail_list) ? data.preference_detail_list : [];
   const toolList = Array.isArray(data?.tool_memory_detail_list) ? data.tool_memory_detail_list : [];
 
-  const memoryCandidates = memoryList.slice(0, limit).map((item, idx) => ({
+  // Self-hosted format: text_mem[].memories → merge into memoryList for filtering
+  const textMems = data?.text_mem?.[0]?.memories ?? [];
+  const selfHostedMemoryList = textMems.map((item) => ({
+    memory_value: item?.memory || "",
+    memory_key: "",
+    relativity: item?.relativity ?? 1,
+    create_time: item?.create_time || item?.updated_at || item?.created_at,
+    _selfHosted: true,
+    _original: item,
+  }));
+  const combinedMemoryList = [...memoryList, ...selfHostedMemoryList];
+
+  const memoryCandidates = combinedMemoryList.slice(0, limit).map((item, idx) => ({
     idx,
     text: truncate(item?.memory_value || item?.memory_key || "", maxChars),
     relativity: item?.relativity,
@@ -269,7 +281,7 @@ function buildRecallCandidates(data, cfg) {
   }));
 
   return {
-    memoryList,
+    memoryList: combinedMemoryList,
     preferenceList,
     toolList,
     candidatePayload: {
@@ -286,12 +298,24 @@ function applyRecallDecision(data, decision, lists) {
   const preferenceIdx = normalizeIndexList(keep.preference, lists.preferenceList.length);
   const toolIdx = normalizeIndexList(keep.tool_memory, lists.toolList.length);
 
-  return {
+  const keptMemories = memoryIdx.map((idx) => lists.memoryList[idx]);
+  const cloudMemories = keptMemories.filter((m) => !m._selfHosted);
+  const selfHostedMemories = keptMemories.filter((m) => m._selfHosted).map((m) => m._original);
+
+  const result = {
     ...data,
-    memory_detail_list: memoryIdx.map((idx) => lists.memoryList[idx]),
+    memory_detail_list: cloudMemories,
     preference_detail_list: preferenceIdx.map((idx) => lists.preferenceList[idx]),
     tool_memory_detail_list: toolIdx.map((idx) => lists.toolList[idx]),
   };
+
+  if (selfHostedMemories.length > 0 && data?.text_mem?.[0]) {
+    result.text_mem = [{ ...data.text_mem[0], memories: selfHostedMemories }];
+  } else if (data?.text_mem) {
+    result.text_mem = [{ ...(data.text_mem[0] || {}), memories: [] }];
+  }
+
+  return result;
 }
 
 async function callRecallFilterModel(cfg, userPrompt, candidatePayload) {
@@ -392,7 +416,7 @@ export default {
   id: "memos-cloud-openclaw-plugin",
   name: "MemOS Cloud OpenClaw Plugin",
   description: "MemOS Cloud recall + add memory via lifecycle hooks",
-  kind: "memory",
+  kind: "lifecycle",
 
   register(api) {
     const cfg = buildConfig(api.pluginConfig);

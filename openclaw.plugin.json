@@ -162,6 +162,11 @@
       "throttleMs": {
         "type": "integer",
         "default": 0
+      },
+      "serverMode": {
+        "type": "string",
+        "enum": ["cloud", "self-hosted"],
+        "description": "Server mode: 'cloud' for official MemOS Cloud, 'self-hosted' for local/custom MemOS instances. Auto-detected from baseUrl if not set."
       }
     },
     "additionalProperties": false

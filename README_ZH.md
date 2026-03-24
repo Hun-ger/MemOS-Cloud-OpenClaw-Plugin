@@ -91,7 +91,8 @@ MEMOS_API_KEY=YOUR_TOKEN
 
 **可选配置**
 - `MEMOS_BASE_URL`（默认 `https://memos.memtensor.cn/api/openmem/v1`）
-- `MEMOS_API_KEY`（必填，Token 认证）—— 获取地址：https://memos-dashboard.openmem.net/cn/apikeys/
+- `MEMOS_API_KEY`（Cloud 模式必填，Token 认证）—— 获取地址：https://memos-dashboard.openmem.net/cn/apikeys/
+- `MEMOS_SERVER_MODE`（`cloud` | `self-hosted`，默认根据 baseUrl 自动检测）
 - `MEMOS_USER_ID`（可选，默认 `openclaw-user`）
 - `MEMOS_CONVERSATION_ID`（可选覆盖）
 - `MEMOS_RECALL_GLOBAL`（默认 `true`；为 true 时检索不传 conversation_id）
@@ -146,6 +147,88 @@ MEMOS_API_KEY=YOUR_TOKEN
   "recallFilterCandidateLimit": 30,
   "recallFilterMaxItemChars": 500,
   "recallFilterFailOpen": true
+}
+```
+
+## Self-Hosted（私有化部署）配置
+
+如果你在本地或私有服务器上部署了 MemOS 实例，可以通过以下方式将插件连接到你自己的 MemOS 服务。
+
+### 与 Cloud 模式的区别
+
+| 对比项 | Cloud（默认） | Self-Hosted |
+|--------|--------------|-------------|
+| API 地址 | `https://memos.memtensor.cn/api/openmem/v1` | 你的服务器地址，如 `http://localhost:8001` |
+| API Key | **必填** | **可选**（取决于你的部署配置） |
+| 搜索接口 | `/search/memory` | `/product/search` |
+| 添加接口 | `/add/message` | `/product/add` |
+| 会话标识 | `conversation_id` | `mem_cube_id`（内部自动映射） |
+
+### 模式检测机制
+
+插件会按以下优先级判断当前运行模式：
+
+1. **显式配置** — 插件 config 中设置 `"serverMode": "self-hosted"`
+2. **环境变量** — 设置 `MEMOS_SERVER_MODE=self-hosted`
+3. **自动检测** — 当 `MEMOS_BASE_URL` 的主机名为 `localhost`、`127.x.x.x`、`10.x.x.x`、`192.168.x.x` 或 `172.16-31.x.x` 时，自动识别为 self-hosted 模式
+
+> 如果你的 MemOS 部署在公网 IP 但仍使用 self-hosted 版本，需要**手动指定** `serverMode` 或 `MEMOS_SERVER_MODE`，否则会被默认识别为 cloud 模式。
+
+### 快速配置
+
+**方式一：通过环境变量**
+
+```env
+MEMOS_BASE_URL=http://localhost:8001
+MEMOS_SERVER_MODE=self-hosted
+MEMOS_USER_ID=my-user
+```
+
+> Self-hosted 模式下 `MEMOS_API_KEY` 不是必填项。如果你的私有部署不需要鉴权，可以省略。
+
+**方式二：通过插件 config（openclaw.json）**
+
+```json
+{
+  "plugins": {
+    "entries": {
+      "memos-cloud-openclaw-plugin": {
+        "enabled": true,
+        "config": {
+          "baseUrl": "http://localhost:8001",
+          "serverMode": "self-hosted",
+          "userId": "my-user",
+          "conversationId": "main"
+        }
+      }
+    }
+  }
+}
+```
+
+**方式三：自动检测（最简配置）**
+
+如果你的 MemOS 部署在本地，只需设置 `baseUrl` 指向本地地址，插件会自动切换到 self-hosted 模式：
+
+```env
+MEMOS_BASE_URL=http://localhost:8001
+```
+
+### 公网部署的 Self-Hosted 实例
+
+当 MemOS 部署在公网服务器上时，自动检测不会生效，需要显式声明模式：
+
+```env
+MEMOS_BASE_URL=http://your-server-ip:8008
+MEMOS_SERVER_MODE=self-hosted
+```
+
+或在插件 config 中：
+
+```json
+{
+  "baseUrl": "http://your-server-ip:8008",
+  "serverMode": "self-hosted"
 }
 ```
 
